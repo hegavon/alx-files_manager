@@ -20,4 +20,3 @@ const envLoader = () => {
 };
 
 export default envLoader;
-

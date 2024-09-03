@@ -1,9 +1,8 @@
 import { MongoClient } from 'mongodb';
 
-
 class DBClient {
   constructor() {
-    this.connected = false
+    this.connected = false;
     const HOST = process.env.DB_HOST || 'localhost';
     const PORT = process.env.DB_PORT || 27017;
     const DATABASE = process.env.DB_DATABASE || 'files_manager';
@@ -15,15 +14,16 @@ class DBClient {
     this.client
       .connect()
       .then(() => {
-        this.connected = true
+        this.connected = true;
         this.db = this.client.db(`${DATABASE}`);
       })
       .catch((err) => {
         console.log(err);
       });
   }
+
   isAlive() {
-    return this.connected
+    return this.connected;
   }
 
   async nbUsers() {
@@ -42,4 +42,3 @@ class DBClient {
 const dbClient = new DBClient();
 
 module.exports = dbClient;
-
