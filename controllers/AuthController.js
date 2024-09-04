@@ -1,19 +1,48 @@
+/* eslint-disable import/no-named-as-default */
+import sha1 from 'sha1';
 import { v4 as uuidv4 } from 'uuid';
-import clientRedis from '../utils/redis';
+import { ObjectId } from 'mongodb';
+import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
-export default class AuthController {
-  static async getConnect(req, res) {
-    const { user } = req;
-    const token = uuidv4();
-
-    await clientRedis.set(`auth_${token}`, user._id.toString(), 24 * 60 * 60);
-    res.status(200).json({ token });
+export async function getConnect(req, res) {
+  // Retrieve 'Authorization' Basic Auth string
+  const authBase64 = req.headers.authorization.slice(6);
+  if (!authBase64) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  static async getDisconnect(req, res) {
-    const token = req.headers['x-token'];
+  // Decode and parse the Base 64 value
+  const decodedAuth = Buffer.from(authBase64, 'base64').toString('utf-8');
+  const [userEmail, userPassword] = decodedAuth.split(':');
 
-    await clientRedis.del(`auth_${token}`);
-    res.status(204).send();
+  // Retrieve user
+  const user = await dbClient.findOne('users', { email: userEmail });
+
+  // Check credentials
+  if (!user || sha1(userPassword) !== user.password) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
+
+  // Set a 24h token with redisClient
+  const token = uuidv4();
+  redisClient.set(`auth_${token}`, user._id.toString(), 24 * 3600);
+  return res.json({ token });
+}
+
+export async function disconnect(req, res) {
+  const token = req.headers['x-token'];
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const userId = await redisClient.get(`auth_${token}`);
+  const user = await dbClient.findOne('users', { _id: new ObjectId(userId) });
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  await redisClient.del(`auth_${token}`);
+
+  return res.status(204).end();
 }

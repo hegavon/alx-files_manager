@@ -1,18 +1,22 @@
-import client from '../utils/redis';
-import clientDb from '../utils/db';
+/* eslint-disable import/no-named-as-default */
+import redisClient from '../utils/redis';
+import dbClient from '../utils/db';
 
-export default class AppController {
-  static getStatus(req, res) {
-    res.status(200).json({
-      redis: client.isAlive(),
-      db: clientDb.isAlive(),
-    });
-  }
+export function getStatus() {
+  return { redis: redisClient.isAlive(), db: dbClient.isAlive() };
+}
 
-  static getStats(req, res) {
-    Promise.all([clientDb.nbUsers(), clientDb.nbFiles()])
-      .then(([usersCount, filesCount]) => {
-        res.status(200).json({ users: usersCount, files: filesCount });
-      });
+export async function getStats() {
+  try {
+    const usersCountPromise = dbClient.nbUsers();
+    const filesCountPromise = dbClient.nbFiles();
+
+    // Wait for both promises to resolve
+    const [usersCount, filesCount] = await Promise.all([usersCountPromise, filesCountPromise]);
+
+    return { users: usersCount, files: filesCount };
+  } catch (error) {
+    console.error('Error retrieving stats:', error);
+    throw error; // Rethrow the error for handling at higher level
   }
 }
