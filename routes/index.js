@@ -1,73 +1,81 @@
 import express from 'express';
-import { getStatus, getStats } from '../controllers/AppController';
-import { getConnect, disconnect } from '../controllers/AuthController';
-import { postNew, getMe } from '../controllers/UsersController';
-import {
-  postUpload, getShow, getIndex, publish, unpublish, getFile,
-} from '../controllers/FilesController';
+import AppController from '../controllers/AppController';
+import UsersController from '../controllers/UsersController';
+import AuthController from '../controllers/AuthController';
+import FilesController from '../controllers/FilesController';
 
-// Create router
-const router = express.Router();
+function controllerRouting(app) {
+  const router = express.Router();
+  app.use('/', router);
 
-// 'GET /status' route
-router.get('/status', (req, res) => {
-  res.json(getStatus());
-});
+  // App Controller
 
-// 'GET /stats' route
-router.get('/stats', async (req, res) => {
-  res.json(await getStats());
-});
+  // should return if Redis is alive and if the DB is alive
+  router.get('/status', (req, res) => {
+    AppController.getStatus(req, res);
+  });
 
-// 'POST /users' route
-router.post('/users', async (req, res) => {
-  await postNew(req, res);
-});
+  // should return the number of users and files in DB
+  router.get('/stats', (req, res) => {
+    AppController.getStats(req, res);
+  });
 
-// 'GET /users/me' route
-router.get('/users/me', async (req, res) => {
-  await getMe(req, res);
-});
+  // User Controller
 
-// 'GET /connect' route
-router.get('/connect', async (req, res) => {
-  await getConnect(req, res);
-});
+  // should create a new user in DB
+  router.post('/users', (req, res) => {
+    UsersController.postNew(req, res);
+  });
 
-// 'GET /disconnect' route
-router.get('/disconnect', async (req, res) => {
-  await disconnect(req, res);
-});
+  // should retrieve the user base on the token used
+  router.get('/users/me', (req, res) => {
+    UsersController.getMe(req, res);
+  });
 
-// 'POST /files' route
-router.post('/files', async (req, res) => {
-  await postUpload(req, res);
-});
+  // Auth Controller
 
-// 'GET /files/:id' route
-router.get('/files/:id', async (req, res) => {
-  await getShow(req, res);
-});
+  // should sign-in the user by generating a new authentication token
+  router.get('/connect', (req, res) => {
+    AuthController.getConnect(req, res);
+  });
 
-// 'GET /files' route
-router.get('/files', async (req, res) => {
-  await getIndex(req, res);
-});
+  // should sign-out the user based on the token
+  router.get('/disconnect', (req, res) => {
+    AuthController.getDisconnect(req, res);
+  });
 
-// 'PUT /files/:id/publish' route
-router.put('/files/:id/publish', async (req, res) => {
-  await publish(req, res);
-});
+  // Files Controller
 
-// 'PUT /files/:id/unpublish' route
-router.put('/files/:id/unpublish', async (req, res) => {
-  await unpublish(req, res);
-});
+  // should create a new file in DB and in disk
+  router.post('/files', (req, res) => {
+    FilesController.postUpload(req, res);
+  });
 
-// 'GET /files/:id/data' route
-router.get('/files/:id/data', async (req, res) => {
-  await getFile(req, res);
-});
+  // should retrieve the file document based on the ID
+  router.get('/files/:id', (req, res) => {
+    FilesController.getShow(req, res);
+  });
 
-// Export router
-export default router;
+  // should retrieve all users file documents for a
+  // specific parentId and with pagination
+  router.get('/files', (req, res) => {
+    FilesController.getIndex(req, res);
+  });
+
+  // should set isPublic to true on the file document based on the ID
+  router.put('/files/:id/publish', (req, res) => {
+    FilesController.putPublish(req, res);
+  });
+
+  // should set isPublic to false on the file document based on the ID
+  router.put('/files/:id/unpublish', (req, res) => {
+    FilesController.putUnpublish(req, res);
+  });
+
+  // should return the content of the file document based on the ID
+  router.get('/files/:id/data', (req, res) => {
+    FilesController.getFile(req, res);
+  });
+}
+
+export default controllerRouting;

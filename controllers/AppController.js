@@ -1,22 +1,32 @@
-/* eslint-disable import/no-named-as-default */
 import redisClient from '../utils/redis';
 import dbClient from '../utils/db';
 
-export function getStatus() {
-  return { redis: redisClient.isAlive(), db: dbClient.isAlive() };
-}
+class AppController {
+  /**
+   * should return if Redis is alive and if the DB is alive too
+   * by using the 2 utils created previously:
+   * { "redis": true, "db": true } with a status code 200
+   */
+  static getStatus(request, response) {
+    const status = {
+      redis: redisClient.isAlive(),
+      db: dbClient.isAlive(),
+    };
+    response.status(200).send(status);
+  }
 
-export async function getStats() {
-  try {
-    const usersCountPromise = dbClient.nbUsers();
-    const filesCountPromise = dbClient.nbFiles();
-
-    // Wait for both promises to resolve
-    const [usersCount, filesCount] = await Promise.all([usersCountPromise, filesCountPromise]);
-
-    return { users: usersCount, files: filesCount };
-  } catch (error) {
-    console.error('Error retrieving stats:', error);
-    throw error; // Rethrow the error for handling at higher level
+  /**
+   * should return the number of users and files in DB:
+   * { "users": 12, "files": 1231 }
+   *  with a status code 200
+   */
+  static async getStats(request, response) {
+    const stats = {
+      users: await dbClient.nbUsers(),
+      files: await dbClient.nbFiles(),
+    };
+    response.status(200).send(stats);
   }
 }
+
+export default AppController;
