@@ -1,57 +1,35 @@
+/* eslint-disable consistent-return */
+/* eslint-disable import/no-named-as-default */
 import sha1 from 'sha1';
-import Queue from 'bull/lib/queue';
+import { ObjectId } from 'mongodb';
 import dbClient from '../utils/db';
+import redisClient from '../utils/redis';
 
-const userQueue = new Queue('email sending');
+const postNew = async (req, res) => {
+  const { body: { email, password } } = req;
+  if (!email) return res.status(400).json({ error: 'Missing email' });
+  if (!password) return res.status(400).json({ error: 'Missing password' });
+  const database = dbClient.db.collection('users');
+  const user = await database.find({ email }).toArray();
+  if (user.length > 0) return res.status(400).json({ error: 'Already exist' });
+  const hashedpwd = sha1(password);
+  const newUser = await database.insertOne({ email, password: hashedpwd });
+  const id = `${newUser.insertedId}`;
+  res.status(201).json({ id, email });
+};
 
-/**
- * Controller for the index route.
- * @class UsersController
- * @method postNew
- * @method getMe
- */
-class UsersController {
-  /**
-   * Method for the route POST /users.
-   * Create a new user in DB.
-   * @param {object} req - The express request object.
-   * @param {object} res - The express response object.
-   * @returns {object} The status code 201 and the new user if successful,
-   *                   400 if missing parameters or 409 if already exist.
-   */
-  static async postNew(req, res) {
-    const email = req.body ? req.body.email : null;
-    const password = req.body ? req.body.password : null;
+const getMe = async (req, res) => {
+  const token = req.headers['x-token'];
+  const redisKey = `auth_${token}`;
+  const value = await redisClient.get(redisKey);
+  const MongoId = new ObjectId(value);
+  const database = dbClient.db.collection('users');
+  const user = await database.findOne({ _id: ObjectId(MongoId) });
 
-    if (!email) return res.status(400).json({ error: 'Missing email' });
-    if (!password) return res.status(400).json({ error: 'Missing password' });
-
-    const user = await (await dbClient.usersCollection()).findOne({ email });
-
-    if (user) return res.status(400).json({ error: 'Already exist' });
-
-    try {
-      const addUserInfo = await (await dbClient.usersCollection())
-        .insertOne({ email, password: sha1(password) });
-      const userId = addUserInfo.insertedId.toString();
-
-      userQueue.add({ userId });
-      return res.status(201).json({ id: userId, email });
-    } catch (err) {
-      return res.status(500).json({ error: err.message });
-    }
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
   }
+  return res.status(200).json({ id: user._id, email: user.email });
+};
 
-  /**
-   * Method for the route GET /users/me.
-   * Fetches a user in DB.
-   * @param {object} req - The express request object.
-   * @param {object} res - The express response object.
-   * @returns {object} The status code 200 and the user if successful,
-   */
-  static async getMe(req, res) {
-    return res.status(200).json({ id: req.user._id.toString(), email: req.user.email });
-  }
-}
-
-export default UsersController;
+export { postNew, getMe };
