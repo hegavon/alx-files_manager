@@ -1,35 +1,39 @@
-/* eslint-disable consistent-return */
-/* eslint-disable import/no-named-as-default */
 import sha1 from 'sha1';
-import { ObjectId } from 'mongodb';
-import dbClient from '../utils/db';
-import redisClient from '../utils/redis';
+import Queue from 'bull/lib/queue';
+import clientDb from '../utils/db';
 
-const postNew = async (req, res) => {
-  const { body: { email, password } } = req;
-  if (!email) return res.status(400).json({ error: 'Missing email' });
-  if (!password) return res.status(400).json({ error: 'Missing password' });
-  const database = dbClient.db.collection('users');
-  const user = await database.find({ email }).toArray();
-  if (user.length > 0) return res.status(400).json({ error: 'Already exist' });
-  const hashedpwd = sha1(password);
-  const newUser = await database.insertOne({ email, password: hashedpwd });
-  const id = `${newUser.insertedId}`;
-  res.status(201).json({ id, email });
-};
+const userQueue = new Queue('email sending');
 
-const getMe = async (req, res) => {
-  const token = req.headers['x-token'];
-  const redisKey = `auth_${token}`;
-  const value = await redisClient.get(redisKey);
-  const MongoId = new ObjectId(value);
-  const database = dbClient.db.collection('users');
-  const user = await database.findOne({ _id: ObjectId(MongoId) });
+export default class UsersController {
+  static async postNew(req, res) {
+    const email = req.body ? req.body.email : null;
+    const password = req.body ? req.body.password : null;
 
-  if (!user) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    if (!email) {
+      res.status(400).json({ error: 'Missing email' });
+      return;
+    }
+    if (!password) {
+      res.status(400).json({ error: 'Missing password' });
+      return;
+    }
+    const user = await (await clientDb.usersCollection()).findOne({ email });
+
+    if (user) {
+      res.status(400).json({ error: 'Already exist' });
+      return;
+    }
+    const insertionInfo = await (await clientDb.usersCollection())
+      .insertOne({ email, password: sha1(password) });
+    const userId = insertionInfo.insertedId.toString();
+
+    userQueue.add({ userId });
+    res.status(201).json({ email, id: userId });
   }
-  return res.status(200).json({ id: user._id, email: user.email });
-};
 
-export { postNew, getMe };
+  static async getMe(req, res) {
+    const { user } = req;
+
+    res.status(200).json({ email: user.email, id: user._id.toString() });
+  }
+}
